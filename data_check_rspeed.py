@@ -12,6 +12,8 @@ import pdb
 from collections import Counter
 import time
 import multiprocessing
+from itertools import  product
+
 
 #test_dict = defaultdict(lambda:'')
 #for x in test_list:
@@ -20,6 +22,8 @@ import multiprocessing
 ##global variable    
 all_label_result = defaultdict(lambda:set())
 high_label_result = defaultdict(lambda:[])
+feature_length_result = defauldict()
+total_length = 0
 ##including high key now
 key_list = ['begid','city_code','doc_category','doc_original','interestbizs','age','pic_num','province_code','sex','subcategories','usercategories','video_num','vulgar','direction','ttseg_hash','kt_hash']
 
@@ -73,6 +77,8 @@ def control_feature_length(cut_num):
 @profile
 def get_all_onehot(feature,label_list):
     print('start encode feature: ',feature,'length: ',len(label_list))
+    feature_length_result[feature] = len(label_list)
+    total_length += len(label_list)
     enc = LabelEncoder()
     enc.fit(label_list)
     enc_label = enc.transform(label_list)
@@ -104,7 +110,7 @@ def get_encode_result(all_label_encoder,feature_list,data_input):
             result[feature]= one_hot_index_array
         else:
             #print('no_data',feature)
-            result[feature] = ''
+            result[feature] = 0
 
     return result
 ##if control length then do it
@@ -127,16 +133,13 @@ def get_high_encode_result(all_label_encoder,feature_list,data_input):
             result[feature]= new_data_result
         else:
             #print('no_data',feature)
-            result[feature] = ''
+            result[feature] = np.array([])
 
     return result
 
 @profile
 def get_cross_feature(feature_a, feature_b,one_hot_data_result): 
-    feature_a = csr_matrix(one_hot_data_result[feature_a].sum(axis=0).reshape(-1,1))
-    feature_b = csr_matrix(one_hot_data_result[feature_b].sum(axis=0))
-    dot_result = feature_a.dot(feature_b)
-    return dot_result
+    return list(product(one_hot_data_result[feature_a],one_hot_data_result[feature_b]))
 
 
 @profile
@@ -145,21 +148,21 @@ def multi_process_instance(test_data_index):
     test_data = test_data_index
     one_hot_data_result = get_encode_result(all_label_encoder,key_list,test_data)
     #one_hot_high_data_result = get_high_encode_result(all_label_encoder,high_key_list,test_data)
-    final_result = csr_matrix(np.array([]))
+    #final_result = csr_matrix(np.array([]))
 
-    for feature,result in one_hot_data_result.items():
-        #print(np.sum(sparse_result.toarray(),axis = 0))
-        #print(sparse_result.todense())
-        if result is not '' : 
-            #array_result = np.sum(result.toarray(),axis = 0)
-            array_result = csr_matrix(result.sum(axis=0))
-            #print(len(array_result))
-            #final_result = np.append(final_result, array_result)
-            final_result = hstack((final_result,array_result),format = 'csr')
-        else:
-            #final_result = np.append(final_result, np.zeros(len(all_label_result[feature])))
-            final_result = hstack((final_result, csr_matrix(np.zeros(len(all_label_result[feature])))),format = 'csr')
-            one_hot_data_result[feature] = csr_matrix(np.zeros(len(all_label_result[feature])))
+    #for feature,result in one_hot_data_result.items():
+    #    #print(np.sum(sparse_result.toarray(),axis = 0))
+    #    #print(sparse_result.todense())
+    #    if result is not '' : 
+    #        #array_result = np.sum(result.toarray(),axis = 0)
+    #        array_result = csr_matrix(result.sum(axis=0))
+    #        #print(len(array_result))
+    #        #final_result = np.append(final_result, array_result)
+    #        final_result = hstack((final_result,array_result),format = 'csr')
+    #    else:
+    #        #final_result = np.append(final_result, np.zeros(len(all_label_result[feature])))
+    #        final_result = hstack((final_result, csr_matrix(np.zeros(len(all_label_result[feature])))),format = 'csr')
+    #        one_hot_data_result[feature] = csr_matrix(np.zeros(len(all_label_result[feature])))
 
 #    for feature,result in one_hot_high_data_result.items():
 #        #print(np.sum(sparse_result.toarray(),axis = 0))
@@ -174,18 +177,41 @@ def multi_process_instance(test_data_index):
 #            one_hot_high_data_result[feature] = csr_matrix(np.zeros(len(all_label_result[feature])))
 #
 #    one_hot_data_result.update(one_hot_high_data_result)
-    cross_result = []
+    cross_result = defaultdict()
     for line in cross_lines:
         cross_feat = line.strip().split()
         feat_a = cross_feat[0]
         feat_b = cross_feat[1]
         #print feat_a, ' x ', feat_b
-        cross_result.append(get_cross_feature(feat_a, feat_b,one_hot_data_result))
-
-    for cross_data in cross_result:
+        total_length += (feature_length_result[feat_a] * feature_length_result[feat_b])
+        cross_result[line] = get_cross_feature(feat_a, feat_b,one_hot_data_result))
+    final_result = []
+    position_num = 0
+    for feature,result in one_hot_data_result.items():
+        #print(np.sum(sparse_result.toarray(),axis = 0))
+        #print(sparse_result.todense())
+        for one_index in result:
+            final_result.append(position_num+one_index)
+        position_num += feature_length_result[feature]
+    for feature_line,result in cross_result.items():
+        cross_feat = feature_line.strip().split()
+        feat_a = cross_feat[0]
+        feat_b = cross_feat[1]
+        final_result.append(positoin_num+((
+        
+            #array_result = np.sum(result.toarray(),axis = 0)
+            #array_result = csr_matrix(result.sum(axis=0))
+            #print(len(array_result))
+            #final_result = np.append(final_result, array_result)
+            #final_result = hstack((final_result,array_result),format = 'csr')
+       # else:
+       #     #final_result = np.append(final_result, np.zeros(len(all_label_result[feature])))
+       #     final_result = hstack((final_result, csr_matrix(np.zeros(len(all_label_result[feature])))),format = 'csr')
+       #     one_hot_data_result[feature] = csr_matrix(np.zeros(len(all_label_result[feature])))
+    #for cross_data in cross_result:
         #cross_data.toarray()
         #final_result = np.append(final_result, cross_data.toarray().reshape(-1))
-        final_result = hstack((final_result, csr_matrix(cross_data.toarray().reshape(-1))),format = 'csr')
+        #final_result = hstack((final_result, csr_matrix(cross_data.toarray().reshape(-1))),format = 'csr')
 #    if data_result_chunk is not '':
 #        data_result_chunk = vstack((data_result_chunk,final_result),format='csr')
 #    else:
